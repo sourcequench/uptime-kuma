@@ -1,0 +1,41 @@
+---
+- name: Fix SSL Certificates on router-xfinity
+  hosts: router-xfinity
+  gather_facts: no
+  tasks:
+    - name: Prepare combined PEM file locally
+      delegate_to: localhost
+      ansible.builtin.shell: |
+        cat "/home/ryan/.acme.sh/*.sourcequench.org_ecc/*.sourcequench.org.key" \
+            "/home/ryan/.acme.sh/*.sourcequench.org_ecc/fullchain.cer" \
+            > /tmp/router_wildcard.pem
+      changed_when: false
+
+    - name: Create SSL directories on routers
+      ansible.builtin.raw: |
+        sudo mkdir -p /config/ssl/private && sudo chown -R root:root /config/ssl && sudo chmod 700 /config/ssl/private
+
+    - name: Push combined PEM to routers
+      ansible.builtin.copy:
+        src: /tmp/router_wildcard.pem
+        dest: /config/ssl/private/server.pem
+        owner: root
+        group: root
+        mode: '0600'
+      become: yes
+
+    - name: Configure EdgeOS GUI to use the new certificate and move port
+      ansible.builtin.raw: |
+        sg vyattacfg -c "
+          /opt/vyatta/sbin/vyatta-cfg-cmd-wrapper begin
+          /opt/vyatta/sbin/vyatta-cfg-cmd-wrapper set service gui cert-file /config/ssl/private/server.pem
+          /opt/vyatta/sbin/vyatta-cfg-cmd-wrapper set service gui https-port 444
+          /opt/vyatta/sbin/vyatta-cfg-cmd-wrapper commit
+          /opt/vyatta/sbin/vyatta-cfg-cmd-wrapper save
+          /opt/vyatta/sbin/vyatta-cfg-cmd-wrapper end
+        "
+
+    - name: Restart Lighttpd
+      ansible.builtin.raw: |
+        sudo kill -SIGINT $(cat /var/run/lighttpd.pid) && sleep 2 && sudo /usr/sbin/lighttpd -f /etc/lighttpd/lighttpd.conf
+      failed_when: false

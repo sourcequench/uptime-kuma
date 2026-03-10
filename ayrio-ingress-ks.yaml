@@ -1,0 +1,17 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: ayrio-ingress
+  namespace: kube-system
+spec:
+  entryPoints:
+    - websecure
+  routes:
+  - match: Host(`ayrio.net`)
+    kind: Rule
+    services:
+    - name: ayrio-service
+      namespace: ayrio
+      port: 80
+  tls:
+    secretName: ayrio-net-cert

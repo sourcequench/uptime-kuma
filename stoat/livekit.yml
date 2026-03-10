@@ -1,0 +1,19 @@
+rtc:
+  use_external_ip: true
+  port_range_start: 50000
+  port_range_end: 50100
+  tcp_port: 7881
+
+redis:
+  address: redis:6379
+
+turn:
+  enabled: false
+
+keys:
+  04bc7aa434d9: 9db5c5042c6e0d8a55c08625f40378fba3c74c43fda586a9
+
+webhook:
+  api_key: 04bc7aa434d9
+  urls:
+  - "http://voice-ingress:8500/worldwide"

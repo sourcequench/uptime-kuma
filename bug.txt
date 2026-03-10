@@ -1,0 +1,44 @@
+### Title
+[Bug] ntfy notification fails with 400 error for local IP/FQDN monitors (Missing 'url' in 'view' action)
+
+### Description
+When a monitor is configured with a local IP address (e.g., 172.16.x.x) or an internal FQDN that is not a public URL, the ntfy notification provider fails to send actual alerts (Down/Up) while the "Test Notification" button continues to work correctly. 
+
+The failure happens because Uptime Kuma attempts to attach a 'view' action button to the ntfy payload, but the 'url' parameter provided for that action is rejected by the ntfy server (specifically observed on ntfy.sh).
+
+### Steps to Reproduce
+1. Set up a monitor using a local IP or internal hostname (e.g., 172.16.1.111).
+2. Configure a ntfy notification provider.
+3. Click "Test Notification" (This will likely succeed).
+4. Trigger an actual failure for the monitor (e.g., change the port to one that is closed).
+5. Check the Uptime Kuma logs when the "Down" alert triggers.
+
+### Expected Behavior
+The notification should be delivered, or the "view" action should be omitted if a valid public URL cannot be constructed.
+
+### Actual Behavior
+The notification fails with an HTTP 400 error from the ntfy server.
+
+### Logs
+```text
+[MONITOR] ERROR: Cannot send notification to ntfy-provider-name
+Error: Error: AxiosError: Request failed with status code 400 
+{
+  "code": 40018,
+  "http": 400,
+  "error": "invalid request: actions invalid; parameter 'url' is required for action 'view'",
+  "link": "https://ntfy.sh/docs/publish/#action-buttons"
+}
+    at Ntfy.throwGeneralAxiosError (/app/server/notification-providers/notification-provider.js:38:15)
+    at Ntfy.send (/app/server/notification-providers/ntfy.js:72:18)
+```
+
+### Environment
+*   Uptime Kuma Version: 1.x (Docker image louislam/uptime-kuma:1)
+*   Notification Provider: ntfy
+*   ntfy Server: ntfy.sh (and self-hosted)
+
+---
+
+### Technical Note
+In server/notification-providers/ntfy.js, the code likely tries to build a URL back to the monitor using the BASE_URL. If the Primary Base URL is not set in Uptime Kuma settings, or if the resulting URL is invalid, ntfy.sh rejects the entire payload because the "view" action requires a valid "url" parameter.

@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: home-services
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: actual-budget-pvc
+  namespace: home-services
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: longhorn
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: actual-budget
+  namespace: home-services
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: actual-budget
+  template:
+    metadata:
+      labels:
+        app: actual-budget
+    spec:
+      containers:
+      - name: actual-budget
+        image: actualbudget/actual-server:latest
+        ports:
+        - containerPort: 5006
+        env:
+        - name: ACTUAL_PORT
+          value: "5006"
+        - name: NODE_ENV
+          value: "production"
+        volumeMounts:
+        - name: actual-data
+          mountPath: /data
+      volumes:
+      - name: actual-data
+        persistentVolumeClaim:
+          claimName: actual-budget-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: actual-budget-svc
+  namespace: home-services
+spec:
+  selector:
+    app: actual-budget
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 5006
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: actual-budget-ingress
+  namespace: home-services
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`budget.sourcequench.org`)
+      kind: Rule
+      services:
+        - name: actual-budget-svc
+          port: 80
+  tls:
+    secretName: sourcequench-wildcard-cert

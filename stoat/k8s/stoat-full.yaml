@@ -1,0 +1,730 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: stoat
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stoat-config
+  namespace: stoat
+data:
+  Revolt.toml: |
+    [hosts]
+    app = "https://stoat.sourcequench.org"
+    api = "https://stoat.sourcequench.org/api"
+    events = "wss://stoat.sourcequench.org/ws"
+    autumn = "https://stoat.sourcequench.org/autumn"
+    january = "https://stoat.sourcequench.org/january"
+
+    [hosts.livekit]
+    worldwide = "wss://stoat.sourcequench.org/livekit"
+
+    [pushd.vapid]
+    private_key = "LS0tLS1CRUdJTiBFQyBQUklWQVRFIEtFWS0tLS0tCk1IY0NBUUVFSUsrN3hkd055a3dwaFlvTWJZN3RGeUxCcThKSEFCSzR0N1hTbGRQeXhnbmxvQW9HQ0NxR1NNNDkKQXdFSG9VUURRZ0FFcGJEK2FoSThyc0NzUVNDKzFpaUswY3BOU1BpY3F3aVVTdjlCc2g0S2RUTjRHbEppRGpWOApFdEt0SGxWa2g4ZGV0eEt1VXYxMXQ0eENJREhaOHZYbm53PT0KLS0tLS1FTkQgRUMgUFJJVkFURSBLRVktLS0tLQo"
+    public_key = "BKWw_moSPK7ArEEgvtYoitHKTUj4nKsIlEr_QbIeCnUzeBpSYg41fBLSrR5VZIfHXrcSrlL9dbeMQiAx2fL1558"
+
+    [files]
+    encryption_key = "wUqHLqZfJCL8jz/kXKw7zq9H+KTxNPUYFx6n7h4Yk3E="
+
+    [api.livekit.nodes.worldwide]
+    url = "http://livekit:7880"
+    lat = 0.0
+    lon = 0.0
+    key = "04bc7aa434d9"
+    secret = "9db5c5042c6e0d8a55c08625f40378fba3c74c43fda586a9"
+
+    [features.limits.new_user]
+    video_resolution = [1920, 1080]
+    video_aspect_ratio = [0.3, 10]
+
+    [features.limits.default]
+    video_resolution = [1920, 1080]
+    video_aspect_ratio = [0.3, 10]
+  livekit.yml: |
+    rtc:
+      use_external_ip: true
+      port_range_start: 50000
+      port_range_end: 50100
+      tcp_port: 7881
+
+    redis:
+      address: redis:6379
+
+    turn:
+      enabled: false
+
+    keys:
+      04bc7aa434d9: 9db5c5042c6e0d8a55c08625f40378fba3c74c43fda586a9
+
+    webhook:
+      api_key: 04bc7aa434d9
+      urls:
+      - "http://voice-ingress:8500/worldwide"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-env
+  namespace: stoat
+data:
+  HOSTNAME: "https://stoat.sourcequench.org"
+  REVOLT_PUBLIC_URL: "https://stoat.sourcequench.org/api"
+  VITE_API_URL: "https://stoat.sourcequench.org/api"
+  VITE_WS_URL: "wss://stoat.sourcequench.org/ws"
+  VITE_MEDIA_URL: "https://stoat.sourcequench.org/autumn"
+  VITE_PROXY_URL: "https://stoat.sourcequench.org/january"
+  VITE_CFG_ENABLE_VIDEO: "true"
+---
+# MongoDB
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb
+  namespace: stoat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+    spec:
+      containers:
+        - name: mongodb
+          image: docker.io/mongo
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - name: data
+              mountPath: /data/db
+              subPath: mongodb
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: stoat-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: database
+  namespace: stoat
+spec:
+  ports:
+    - port: 27017
+      targetPort: 27017
+  selector:
+    app: mongodb
+---
+# KeyDB (Redis)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keydb
+  namespace: stoat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keydb
+  template:
+    metadata:
+      labels:
+        app: keydb
+    spec:
+      containers:
+        - name: keydb
+          image: docker.io/eqalpha/keydb
+          ports:
+            - containerPort: 6379
+          volumeMounts:
+            - name: data
+              mountPath: /data
+              subPath: keydb
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: stoat-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: stoat
+spec:
+  ports:
+    - port: 6379
+      targetPort: 6379
+  selector:
+    app: keydb
+---
+# RabbitMQ
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq
+  namespace: stoat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      containers:
+        - name: rabbitmq
+          image: docker.io/rabbitmq:4
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: "rabbituser"
+            - name: RABBITMQ_DEFAULT_PASS
+              value: "rabbitpass"
+          ports:
+            - containerPort: 5672
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/rabbitmq
+              subPath: rabbitmq
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: stoat-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbit
+  namespace: stoat
+spec:
+  ports:
+    - port: 5672
+      targetPort: 5672
+  selector:
+    app: rabbitmq
+---
+# MinIO
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: stoat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+        - name: minio
+          image: docker.io/minio/minio
+          command: ["/bin/sh", "-c"]
+          args: ["minio server /data"]
+          env:
+            - name: MINIO_ROOT_USER
+              value: "minioautumn"
+            - name: MINIO_ROOT_PASSWORD
+              value: "minioautumn"
+          ports:
+            - containerPort: 9000
+          volumeMounts:
+            - name: data
+              mountPath: /data
+              subPath: minio
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: stoat-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: stoat
+spec:
+  ports:
+    - port: 9000
+      targetPort: 9000
+  selector:
+    app: minio
+---
+# Stoat API
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: stoat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/stoatchat/api:v0.11.1
+          ports:
+            - containerPort: 14702
+          volumeMounts:
+            - name: config
+              mountPath: /Revolt.toml
+              subPath: Revolt.toml
+      volumes:
+        - name: config
+          configMap:
+            name: stoat-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: stoat
+spec:
+  ports:
+    - port: 14702
+      targetPort: 14702
+  selector:
+    app: api
+---
+# Stoat Events
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: events
+  namespace: stoat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: events
+  template:
+    metadata:
+      labels:
+        app: events
+    spec:
+      containers:
+        - name: events
+          image: ghcr.io/stoatchat/events:v0.11.1
+          ports:
+            - containerPort: 14703
+          volumeMounts:
+            - name: config
+              mountPath: /Revolt.toml
+              subPath: Revolt.toml
+      volumes:
+        - name: config
+          configMap:
+            name: stoat-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: events
+  namespace: stoat
+spec:
+  ports:
+    - port: 14703
+      targetPort: 14703
+  selector:
+    app: events
+---
+# Stoat Autumn (File Server)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: autumn
+  namespace: stoat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: autumn
+  template:
+    metadata:
+      labels:
+        app: autumn
+    spec:
+      containers:
+        - name: autumn
+          image: ghcr.io/stoatchat/file-server:v0.11.1
+          ports:
+            - containerPort: 14704
+          volumeMounts:
+            - name: config
+              mountPath: /Revolt.toml
+              subPath: Revolt.toml
+      volumes:
+        - name: config
+          configMap:
+            name: stoat-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: autumn
+  namespace: stoat
+spec:
+  ports:
+    - port: 14704
+      targetPort: 14704
+  selector:
+    app: autumn
+---
+# Stoat January (Proxy)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: january
+  namespace: stoat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: january
+  template:
+    metadata:
+      labels:
+        app: january
+    spec:
+      containers:
+        - name: january
+          image: ghcr.io/stoatchat/proxy:v0.11.1
+          ports:
+            - containerPort: 14705
+          volumeMounts:
+            - name: config
+              mountPath: /Revolt.toml
+              subPath: Revolt.toml
+      volumes:
+        - name: config
+          configMap:
+            name: stoat-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: january
+  namespace: stoat
+spec:
+  ports:
+    - port: 14705
+      targetPort: 14705
+  selector:
+    app: january
+---
+# Stoat Gifbox
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gifbox
+  namespace: stoat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gifbox
+  template:
+    metadata:
+      labels:
+        app: gifbox
+    spec:
+      containers:
+        - name: gifbox
+          image: ghcr.io/stoatchat/gifbox:v0.11.1
+          ports:
+            - containerPort: 14706
+          volumeMounts:
+            - name: config
+              mountPath: /Revolt.toml
+              subPath: Revolt.toml
+      volumes:
+        - name: config
+          configMap:
+            name: stoat-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gifbox
+  namespace: stoat
+spec:
+  ports:
+    - port: 14706
+      targetPort: 14706
+  selector:
+    app: gifbox
+---
+# Stoat Crond
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crond
+  namespace: stoat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crond
+  template:
+    metadata:
+      labels:
+        app: crond
+    spec:
+      containers:
+        - name: crond
+          image: ghcr.io/stoatchat/crond:v0.11.1
+          volumeMounts:
+            - name: config
+              mountPath: /Revolt.toml
+              subPath: Revolt.toml
+      volumes:
+        - name: config
+          configMap:
+            name: stoat-config
+---
+# Stoat Pushd
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pushd
+  namespace: stoat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pushd
+  template:
+    metadata:
+      labels:
+        app: pushd
+    spec:
+      containers:
+        - name: pushd
+          image: ghcr.io/stoatchat/pushd:v0.11.1
+          volumeMounts:
+            - name: config
+              mountPath: /Revolt.toml
+              subPath: Revolt.toml
+      volumes:
+        - name: config
+          configMap:
+            name: stoat-config
+---
+# Stoat Voice Ingress
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: voice-ingress
+  namespace: stoat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: voice-ingress
+  template:
+    metadata:
+      labels:
+        app: voice-ingress
+    spec:
+      containers:
+        - name: voice-ingress
+          image: ghcr.io/stoatchat/voice-ingress:v0.11.1
+          ports:
+            - containerPort: 8500
+          volumeMounts:
+            - name: config
+              mountPath: /Revolt.toml
+              subPath: Revolt.toml
+      volumes:
+        - name: config
+          configMap:
+            name: stoat-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: voice-ingress
+  namespace: stoat
+spec:
+  ports:
+    - port: 8500
+      targetPort: 8500
+  selector:
+    app: voice-ingress
+---
+# Livekit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livekit
+  namespace: stoat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: livekit
+  template:
+    metadata:
+      labels:
+        app: livekit
+    spec:
+      containers:
+        - name: livekit
+          image: ghcr.io/stoatchat/livekit-server:v1.9.6
+          command: ["/livekit-server"]
+          args: ["--config", "/etc/livekit.yml"]
+          ports:
+            - containerPort: 7880
+          volumeMounts:
+            - name: config
+              mountPath: /etc/livekit.yml
+              subPath: livekit.yml
+      volumes:
+        - name: config
+          configMap:
+            name: stoat-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: livekit
+  namespace: stoat
+spec:
+  ports:
+    - port: 7880
+      targetPort: 7880
+  selector:
+    app: livekit
+---
+# Stoat Web
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: stoat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: ghcr.io/stoatchat/for-web:103d2bf
+          ports:
+            - containerPort: 5000
+          envFrom:
+            - configMapRef:
+                name: web-env
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: stoat
+spec:
+  ports:
+    - port: 5000
+      targetPort: 5000
+  selector:
+    app: web
+---
+# Traefik Middleware
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: stoat-stripprefix
+  namespace: stoat
+spec:
+  stripPrefix:
+    prefixes:
+      - /api
+      - /ws
+      - /autumn
+      - /january
+      - /gifbox
+      - /livekit
+      - /ingress
+---
+# Traefik IngressRoute
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: stoat
+  namespace: stoat
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`stoat.sourcequench.org`) && PathPrefix(`/api`)
+      kind: Rule
+      services:
+        - name: api
+          port: 14702
+      middlewares:
+        - name: stoat-stripprefix
+    - match: Host(`stoat.sourcequench.org`) && PathPrefix(`/ws`)
+      kind: Rule
+      services:
+        - name: events
+          port: 14703
+      middlewares:
+        - name: stoat-stripprefix
+    - match: Host(`stoat.sourcequench.org`) && PathPrefix(`/autumn`)
+      kind: Rule
+      services:
+        - name: autumn
+          port: 14704
+      middlewares:
+        - name: stoat-stripprefix
+    - match: Host(`stoat.sourcequench.org`) && PathPrefix(`/january`)
+      kind: Rule
+      services:
+        - name: january
+          port: 14705
+      middlewares:
+        - name: stoat-stripprefix
+    - match: Host(`stoat.sourcequench.org`) && PathPrefix(`/gifbox`)
+      kind: Rule
+      services:
+        - name: gifbox
+          port: 14706
+      middlewares:
+        - name: stoat-stripprefix
+    - match: Host(`stoat.sourcequench.org`) && PathPrefix(`/livekit`)
+      kind: Rule
+      services:
+        - name: livekit
+          port: 7880
+      middlewares:
+        - name: stoat-stripprefix
+    - match: Host(`stoat.sourcequench.org`) && PathPrefix(`/ingress`)
+      kind: Rule
+      services:
+        - name: voice-ingress
+          port: 8500
+      middlewares:
+        - name: stoat-stripprefix
+    - match: Host(`stoat.sourcequench.org`) && PathPrefix(`/`)
+      kind: Rule
+      services:
+        - name: web
+          port: 5000
+  tls: {}

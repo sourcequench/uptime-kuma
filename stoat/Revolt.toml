@@ -1,0 +1,31 @@
+[hosts]
+app = "https://stoat.sourcequench.org"
+api = "https://stoat.sourcequench.org/api"
+events = "wss://stoat.sourcequench.org/ws"
+autumn = "https://stoat.sourcequench.org/autumn"
+january = "https://stoat.sourcequench.org/january"
+
+[hosts.livekit]
+worldwide = "wss://stoat.sourcequench.org/livekit"
+
+[pushd.vapid]
+private_key = "LS0tLS1CRUdJTiBFQyBQUklWQVRFIEtFWS0tLS0tCk1IY0NBUUVFSUsrN3hkd055a3dwaFlvTWJZN3RGeUxCcThKSEFCSzR0N1hTbGRQeXhnbmxvQW9HQ0NxR1NNNDkKQXdFSG9VUURRZ0FFcGJEK2FoSThyc0NzUVNDKzFpaUswY3BOU1BpY3F3aVVTdjlCc2g0S2RUTjRHbEppRGpWOApFdEt0SGxWa2g4ZGV0eEt1VXYxMXQ0eENJREhaOHZYbm53PT0KLS0tLS1FTkQgRUMgUFJJVkFURSBLRVktLS0tLQo"
+public_key = "BKWw_moSPK7ArEEgvtYoitHKTUj4nKsIlEr_QbIeCnUzeBpSYg41fBLSrR5VZIfHXrcSrlL9dbeMQiAx2fL1558"
+
+[files]
+encryption_key = "wUqHLqZfJCL8jz/kXKw7zq9H+KTxNPUYFx6n7h4Yk3E="
+
+[api.livekit.nodes.worldwide]
+url = "http://livekit:7880"
+lat = 0.0
+lon = 0.0
+key = "04bc7aa434d9"
+secret = "9db5c5042c6e0d8a55c08625f40378fba3c74c43fda586a9"
+
+[features.limits.new_user]
+video_resolution = [1920, 1080]
+video_aspect_ratio = [0.3, 10]
+
+[features.limits.default]
+video_resolution = [1920, 1080]
+video_aspect_ratio = [0.3, 10]

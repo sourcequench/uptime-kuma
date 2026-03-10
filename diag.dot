@@ -1,0 +1,92 @@
+digraph NetworkManagement {
+    rankdir=LR;
+    node [shape=box, style=filled, fillcolor=lightgray, fontname="Helvetica", fontsize=10];
+    edge [fontname="Helvetica", fontsize=8];
+    compound=true;
+
+    subgraph cluster_control {
+        label = "Management Server (Localhost)";
+        style=dashed;
+        color=blue;
+        Ansible [label="Ansible Engine", fillcolor=lightblue, shape=hexagon];
+        KeaConfig [label="Kea DHCP Config\n(/etc/kea/)", shape=note];
+        ACME [label="ACME.sh Certs\n(*.sourcequench.org)", shape=note];
+        Backups [label="Local Backups\n(~/backups/)", shape=folder];
+        Syslog [label="rsyslog Receiver\n(Port 6514 TLS)", fillcolor=honeydew, shape=cylinder];
+        SSH_CA [label="SSH CA & gcert\n(/etc/ssh/)", fillcolor=lightcyan, shape=hexagon];
+        Cron [label="Cron Scheduler\n(Weekly Backups)", shape=parallelogram];
+    }
+
+    subgraph cluster_unifi {
+        label = "UniFi Infrastructure";
+        color=darkgreen;
+        CloudKey [label="CloudKey (172.16.1.2)\nUniFi OS / API", fillcolor=honeydew];
+        APs [label="unifi-pond\nunifi-outside\nunifi-upstairs\nunifi-pool", shape=component];
+    }
+
+    subgraph cluster_kubernetes {
+        label = "HA k3s Cluster";
+        color=orange;
+        K8s_Servers [label="uno, dos, tres\n(Servers / etcd)", fillcolor=floralwhite, shape=component];
+        K8s_Agents [label="cuatro, cinco\n(Agents)", fillcolor=floralwhite, shape=component];
+        
+        subgraph cluster_k8s_services {
+            label = "Infrastructure Services";
+            style=dotted;
+            MetalLB [label="MetalLB\n(172.16.1.200-210)", fillcolor=lightyellow];
+            Traefik [label="Traefik Ingress\n(Default SSL)", fillcolor=lightyellow];
+            Longhorn [label="Longhorn\n(Distributed Storage)", fillcolor=lightyellow];
+            Kuma [label="Uptime Kuma\n(status.sourcequench.org)", fillcolor=lightyellow];
+        }
+
+        subgraph cluster_test_app {
+            label = "test-apps namespace";
+            Nginx [label="Nginx Test App\n(nginx-test.sourcequench.org)", fillcolor=honeydew];
+        }
+    }
+
+    subgraph cluster_routers {
+        label = "EdgeRouters";
+        color=red;
+        Routers [label="router-fios\nrouter-xfinity", fillcolor=mistyrose];
+    }
+
+    subgraph cluster_gaming {
+        label = "Gaming Infrastructure";
+        color=purple;
+        SteamDeck [label="Valve Steam Deck\n(SteamOS / Arch)", fillcolor=plum];
+    }
+
+    // Relationships
+    KeaConfig -> Ansible [label="Source of Hostnames"];
+    KeaConfig -> MetalLB [label="Reserved Range", style=dotted];
+    ACME -> Ansible [label="Source of SSL Certs"];
+    Cron -> Ansible [label="Triggers Backups"];
+    
+    Ansible -> CloudKey [label="Sync Names (API)\nDeploy Certs (SSH)\nFetch Backups (SSH)", color=darkgreen];
+    Ansible -> APs [label="Inventory/Facts", color=darkgreen];
+    Ansible -> K8s_Servers [label="SSH CA / Upgrades\nSudo / Syslog", color=orange];
+    Ansible -> K8s_Agents [label="Upgrades / Syslog", color=orange];
+    Ansible -> Routers [label="Deploy Certs\nSSH CA / Backups", color=red];
+    Ansible -> SteamDeck [label="SSH CA / Monitoring", color=purple];
+    Ansible -> Kuma [label="Sync Monitors (API)", color=blue];
+    
+    Traefik -> Nginx [label="HTTPS Proxy"];
+    Traefik -> Kuma [label="HTTPS Proxy"];
+    Nginx -> Longhorn [label="Persistent Content"];
+    Kuma -> Longhorn [label="Persistent Data"];
+    
+    SSH_CA -> Routers [label="Trusts User Certs", dir=both, style=dashed];
+    SSH_CA -> K8s_Servers [label="Trusts User Certs", dir=both, style=dashed];
+    SSH_CA -> SteamDeck [label="Trusts User Certs", dir=both, style=dashed];
+    
+    K8s_Servers -> Syslog [label="TLS Logs", color=orange];
+    K8s_Agents -> Syslog [label="TLS Logs", color=orange];
+    
+    CloudKey -> Backups [label="Weekly Pull", style=dotted];
+    Routers -> Backups [label="Weekly Pull", style=dotted];
+
+    Kuma -> Routers [label="Ping/HTTP", color=blue, style=dotted];
+    Kuma -> CloudKey [label="HTTPS", color=blue, style=dotted];
+    Kuma -> SteamDeck [label="Ping", color=blue, style=dotted];
+}

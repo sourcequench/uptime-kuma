@@ -1,0 +1,18 @@
+# Binaries and archives
+stalwart-cli
+stalwart-cli.tar.gz
+*.zip
+*.tar.gz
+*.gpg
+
+# Temporary files
+*.tmp
+*.log
+Untitled*
+
+# MacOS artifacts
+.DS_Store
+stoat/k8s/stoat-secrets.yaml
+stoat/Revolt.toml
+stoat/livekit.yml
+stoat/env.web
