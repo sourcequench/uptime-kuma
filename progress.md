@@ -300,7 +300,9 @@ digraph NetworkManagement {
 ## 12. Mail Reputation & Spam Control
 - **Strict Spam Rejection:** Configured `/etc/rspamd/local.d/actions.conf` on `muppethouse.com` to explicitly **reject** high-score spam (score > 15) instead of tagging/forwarding it.
 - **Reputation Recovery:** By stopping the forwarding of "Marriott/Costco" spam via SRS to Gmail/Mimecast, the IP reputation of `71.19.146.184` is now in a recovery phase.
-- **Mimecast Compatibility:** SRS implementation combined with stricter spam rejection addresses the "Temporary failure" (persistent greylisting) issues seen with strict MTAs like Mimecast.
+- **Mimecast Compatibility:** 
+  - Identified a persistent "Temporary failure" loop with Mimecast MTAs (e.g., `acce.org`) caused by their use of large outbound IP pools triggering greylisting.
+  - **Whitelisting:** Extracted 20+ Mimecast US IP subnets from official SPF records and added them to the `<company-white>` PF table on `muppethouse.com` to bypass greylisting entirely for these trusted senders.
 
 ## Current State
 The infrastructure provides a high-security, automated environment for web and mail services. Authentication is primarily identity-based via SSH, X.509 certificates, and PGP for Git provenance. The `ayrio.net` ecosystem is fully production-ready, including high-deliverability mail support and automated end-to-end SSL lifecycle management. The **Stoat** service is fully staged for Kubernetes deployment.
