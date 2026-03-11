@@ -297,6 +297,11 @@ digraph NetworkManagement {
   - **sourcequench.org:** Wildcard certificates are now automatically pushed to Traefik (via `configure_traefik_ssl.yml`) and EdgeRouters (via `deploy_router_certs.yml`).
   - **ayrio.net:** Certificates are now automatically pushed to both the Kubernetes `ayrio` namespace and the OpenBSD mail server (`muppethouse.com`) upon renewal.
 
+## 12. Mail Reputation & Spam Control
+- **Strict Spam Rejection:** Configured `/etc/rspamd/local.d/actions.conf` on `muppethouse.com` to explicitly **reject** high-score spam (score > 15) instead of tagging/forwarding it.
+- **Reputation Recovery:** By stopping the forwarding of "Marriott/Costco" spam via SRS to Gmail/Mimecast, the IP reputation of `71.19.146.184` is now in a recovery phase.
+- **Mimecast Compatibility:** SRS implementation combined with stricter spam rejection addresses the "Temporary failure" (persistent greylisting) issues seen with strict MTAs like Mimecast.
+
 ## Current State
 The infrastructure provides a high-security, automated environment for web and mail services. Authentication is primarily identity-based via SSH, X.509 certificates, and PGP for Git provenance. The `ayrio.net` ecosystem is fully production-ready, including high-deliverability mail support and automated end-to-end SSL lifecycle management. The **Stoat** service is fully staged for Kubernetes deployment.
 
@@ -319,6 +324,7 @@ The infrastructure provides a high-security, automated environment for web and m
 - [x] Implement Kube-Janitor for automated resource cleanup. ✅ 2026-03-10
 - [x] Resolve ayrio.net mail loop and implement SRS. ✅ 2026-03-10
 - [x] Finalize `acme.sh` deployment hook for automated certificate pushes. ✅ 2026-03-11
+- [x] Implement strict spam rejection to improve mail reputation. ✅ 2026-03-11
 - [ ] Apply Stoat manifests and verify service availability.
 - [ ] Re-evaluate JMAP (Stalwart) if version 0.15+ becomes available in OpenBSD ports.
 
