@@ -2,6 +2,120 @@
 
 This document summarizes the steps taken to implement a robust infrastructure and automated system configuration.
 
+## Architecture & Infrastructure
+
+### 1. Certificate Management & Trust
+This diagram illustrates the multi-layered trust model:
+- **SSH CA:** Manages secure shell access via User and Host certificates.
+- **X.509 CA:** Issues short-lived client certificates for IMAP/SMTP mTLS.
+- **Let's Encrypt (acme.sh):** Handles public X.509 certificates for Web, Mail, and VPN services with automated Ansible deployment hooks.
+
+```dot
+digraph cert_mgmt {
+    rankdir=LR;
+    node [shape=box, style=filled, fontname="Helvetica"];
+    
+    subgraph cluster_ca {
+        label = "Internal Certificate Authorities";
+        style=dashed;
+        ssh_ca [label="SSH CA\n(/etc/ssh/ssh_user_ca)", fillcolor="#e1f5fe"];
+        x509_ca [label="Local X.509 CA\n(/etc/ssl/local-ca/)", fillcolor="#e1f5fe"];
+    }
+
+    subgraph cluster_public {
+        label = "Public Trust (acme.sh)";
+        style=dashed;
+        lets_encrypt [label="Let's Encrypt\n(ACME DNS-01)", fillcolor="#fff9c4"];
+    }
+
+    subgraph cluster_targets {
+        label = "Targets";
+        k3s [label="K3s Cluster\n(Traefik)", fillcolor="#f1f8e9"];
+        mail [label="muppethouse.com\n(Postfix/Dovecot)", fillcolor="#f1f8e9"];
+        routers [label="EdgeRouters\n(Web UI)", fillcolor="#f1f8e9"];
+        clients [label="User Clients\n(aerc/ssh/web)", fillcolor="#f1f8e9"];
+    }
+
+    ssh_ca -> k3s [label="Host Certs"];
+    ssh_ca -> mail [label="Host Certs"];
+    ssh_ca -> clients [label="User Certs"];
+    
+    x509_ca -> clients [label="mTLS Client Certs"];
+    x509_ca -> mail [label="mTLS Trust"];
+
+    lets_encrypt -> k3s [label="Wildcard SSL"];
+    lets_encrypt -> mail [label="ayrio.net SSL"];
+    lets_encrypt -> routers [label="Wildcard SSL"];
+}
+```
+
+### 2. Service Architecture & Locations
+The following diagram maps established services to their respective runtimes:
+
+```dot
+digraph services {
+    rankdir=TB;
+    node [shape=box, style=filled, fontname="Helvetica"];
+    
+    internet [label="Internet", shape=cloud, fillcolor="#cfd8dc"];
+
+    subgraph cluster_k3s {
+        label = "K3s Cluster (Local Site)";
+        style=filled; color=lightgrey;
+        
+        ayrio [label="ayrio.net\n(Namespace: ayrio)", fillcolor="#bbdefb"];
+        ntfy [label="ntfy.sourcequench.org\n(Namespace: monitoring)", fillcolor="#bbdefb"];
+        status [label="status.sourcequench.org\n(Namespace: monitoring)", fillcolor="#bbdefb"];
+        budget [label="budget.sourcequench.org\n(Namespace: home-services)", fillcolor="#bbdefb"];
+        grafana [label="grafana.sourcequench.org\n(Namespace: monitoring)", fillcolor="#bbdefb"];
+        stoat [label="stoat.sourcequench.org\n(Namespace: stoat)", fillcolor="#fff9c4", style="filled,dashed"];
+    }
+
+    subgraph cluster_openbsd {
+        label = "muppethouse.com (Remote VPS)";
+        style=filled; color="#ffe0b2";
+        
+        smtpd [label="SMTP/SMTPS\n(OpenSMTPD)", fillcolor="#ffccbc"];
+        dovecot [label="IMAPS/mTLS\n(Dovecot)", fillcolor="#ffccbc"];
+        shell [label="SSH Shell", fillcolor="#ffccbc"];
+    }
+
+    internet -> ayrio [label="HTTPS"];
+    internet -> ntfy [label="HTTPS"];
+    internet -> smtpd [label="Port 25/465"];
+    internet -> dovecot [label="Port 993"];
+}
+```
+
+### 3. Kubernetes Ingress & Request Flow
+Request flow for internal services like `ayrio.net`:
+1. **External DNS:** Resolves `ayrio.net` to the firewall WAN IP.
+2. **Router-Fios:** Performs DNAT/Port Forward (443) to the MetalLB LoadBalancer IP.
+3. **Traefik (Ingress):** Handles TLS termination and SNI-based routing.
+4. **Service/Pod:** Routes to the target application container.
+
+```dot
+digraph k8s_flow {
+    rankdir=LR;
+    node [shape=box, style=filled, fontname="Helvetica"];
+
+    user [label="User", shape=ellipse, fillcolor="#cfd8dc"];
+    dns [label="External DNS\n(Hurricane Electric)", fillcolor="#fff9c4"];
+    router [label="router-fios\n(DNAT Port 443)", fillcolor="#ffccbc"];
+    lb [label="MetalLB\n(172.16.1.200)", fillcolor="#d1c4e9"];
+    traefik [label="Traefik\n(Ingress Controller)", fillcolor="#d1c4e9"];
+    svc [label="K8s Service\n(ayrio-service)", fillcolor="#bbdefb"];
+    pods [label="K8s Pods\n(ayrio-deployment)", fillcolor="#bbdefb"];
+
+    user -> dns [label="Resolve"];
+    user -> router [label="HTTPS (WAN IP)"];
+    router -> lb [label="Forward (443)"];
+    lb -> traefik [label="Proxy"];
+    traefik -> svc [label="Route (SNI)"];
+    svc -> pods [label="Load Balance"];
+}
+```
+
 ## 1. Infrastructure Expansion & Security
 - **OpenBSD Integration:** Added `muppethouse.com` to the Ansible inventory under the `[servers]` group.
   - Configured `ansible_become_method=doas` for OpenBSD compatibility.
