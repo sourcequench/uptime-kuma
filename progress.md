@@ -69,8 +69,26 @@ This document summarizes the steps taken to implement a robust infrastructure an
   - Configured Git globally to use this key for mandatory commit signing (`commit.gpgsign = true`).
   - **Public Verification:** Exported the PGP public key block for addition to GitHub to enable "Verified" status on commits.
 
+## 8. Security Remediation & History Purge
+- **Hardcoded Secret Removal:** 
+  - Purged hardcoded `k3s_token` from `ansible/install_k3s.yml` (moved to Ansible Vault).
+  - Refactored `stoat/gen_k8s_secrets.sh` to generate a dedicated Kubernetes Secret manifest (`stoat-secrets.yaml`) instead of baking keys into ConfigMaps.
+- **Git History Purge:** Performed a complete repository reset and forced-push for both `home` and `ansible` repositories to permanently remove historical records of exposed credentials.
+- **Project Mandates:** Updated `GEMINI.md` with strict security guidelines requiring leading spaces for secret-bearing commands and prohibiting plaintext secrets in all project files.
+
+## 9. Operational Tooling (Kube-Janitor)
+- **Automated Cleanup:** Developed `ansible/kube_janitor.yml` to identify and prune unused Kubernetes resources (dangling PVCs, evicted pods, finished jobs).
+- **Environment Stabilization:** Recreated the Ansible virtual environment with the necessary `kubernetes` and `requests` Python libraries to support automated cluster management.
+- **Resource Protection:** Implemented `janitor.skip=true` labels on core namespaces (`ayrio`, `monitoring`, `home-services`) to protect critical production infrastructure from automated cleanup.
+
+## 10. Mail Server Reliability (Alias Fix & SRS)
+- **Loop Resolution:** Fixed a critical infinite loop in the `ayrio.net` virtual alias table that was causing "524 5.2.4 Mailing list expansion problem" errors.
+- **DMARC/SPF Optimization:**
+  - Implemented **SRS (Sender Rewriting Scheme)** in `smtpd.conf` on `muppethouse.com`.
+  - Configured outbound relaying to rewrite envelope-from addresses for forwarded mail, ensuring DMARC/SPF compliance and high deliverability for all hosted domains.
+
 ## Current State
-The infrastructure provides a high-security, automated environment for web and mail services. Authentication is primarily identity-based via SSH, X.509 certificates, and now PGP for Git provenance. The `ayrio.net` ecosystem is fully production-ready. The **Stoat** service is fully staged for Kubernetes deployment.
+The infrastructure provides a high-security, automated environment for web and mail services. Authentication is primarily identity-based via SSH, X.509 certificates, and PGP for Git provenance. The `ayrio.net` ecosystem is fully production-ready, including high-deliverability mail support. The **Stoat** service is fully staged for Kubernetes deployment.
 
 ## Managed Inventory Expansion
 
@@ -87,6 +105,9 @@ The infrastructure provides a high-security, automated environment for web and m
 - [x] Setup SPF/DKIM/DMARC for `ayrio.net`. ✅ 2026-03-08
 - [x] Stage Stoat (Revolt) Kubernetes manifests. ✅ 2026-03-09
 - [x] Install Keybase and configure Git PGP signing. ✅ 2026-03-10
+- [x] Purge repository history of exposed credentials. ✅ 2026-03-10
+- [x] Implement Kube-Janitor for automated resource cleanup. ✅ 2026-03-10
+- [x] Resolve ayrio.net mail loop and implement SRS. ✅ 2026-03-10
 - [ ] Apply Stoat manifests and verify service availability.
 - [ ] Finalize `acme.sh` deployment hook for automated certificate pushes.
 - [ ] Re-evaluate JMAP (Stalwart) if version 0.15+ becomes available in OpenBSD ports.
