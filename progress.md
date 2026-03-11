@@ -87,8 +87,15 @@ This document summarizes the steps taken to implement a robust infrastructure an
   - Implemented **SRS (Sender Rewriting Scheme)** in `smtpd.conf` on `muppethouse.com`.
   - Configured outbound relaying to rewrite envelope-from addresses for forwarded mail, ensuring DMARC/SPF compliance and high deliverability for all hosted domains.
 
+## 11. Automated Certificate Deployment (acme.sh)
+- **Centralized Orchestration:** Created `ansible/deploy_certs.sh` as a master deployment script to handle multiple domains and multi-target pushes (Kubernetes, EdgeRouters, OpenBSD Mail).
+- **Custom acme.sh Hook:** Developed and registered a custom `ansible` deploy hook (`~/.acme.sh/deploy/ansible.sh`) that integrates `acme.sh` directly with the project's Ansible infrastructure.
+- **Multi-Target Pushes:**
+  - **sourcequench.org:** Wildcard certificates are now automatically pushed to Traefik (via `configure_traefik_ssl.yml`) and EdgeRouters (via `deploy_router_certs.yml`).
+  - **ayrio.net:** Certificates are now automatically pushed to both the Kubernetes `ayrio` namespace and the OpenBSD mail server (`muppethouse.com`) upon renewal.
+
 ## Current State
-The infrastructure provides a high-security, automated environment for web and mail services. Authentication is primarily identity-based via SSH, X.509 certificates, and PGP for Git provenance. The `ayrio.net` ecosystem is fully production-ready, including high-deliverability mail support. The **Stoat** service is fully staged for Kubernetes deployment.
+The infrastructure provides a high-security, automated environment for web and mail services. Authentication is primarily identity-based via SSH, X.509 certificates, and PGP for Git provenance. The `ayrio.net` ecosystem is fully production-ready, including high-deliverability mail support and automated end-to-end SSL lifecycle management. The **Stoat** service is fully staged for Kubernetes deployment.
 
 ## Managed Inventory Expansion
 
@@ -108,6 +115,7 @@ The infrastructure provides a high-security, automated environment for web and m
 - [x] Purge repository history of exposed credentials. ✅ 2026-03-10
 - [x] Implement Kube-Janitor for automated resource cleanup. ✅ 2026-03-10
 - [x] Resolve ayrio.net mail loop and implement SRS. ✅ 2026-03-10
+- [x] Finalize `acme.sh` deployment hook for automated certificate pushes. ✅ 2026-03-11
 - [ ] Apply Stoat manifests and verify service availability.
-- [ ] Finalize `acme.sh` deployment hook for automated certificate pushes.
 - [ ] Re-evaluate JMAP (Stalwart) if version 0.15+ becomes available in OpenBSD ports.
+
