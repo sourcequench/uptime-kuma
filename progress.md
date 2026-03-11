@@ -116,6 +116,95 @@ digraph k8s_flow {
 }
 ```
 
+### 4. Big-Picture Architecture & Management
+The following diagram provides a comprehensive view of the entire stack, including local infrastructure, remote servers, and the automated management flows handled by Ansible and acme.sh.
+
+```dot
+digraph NetworkManagement {
+    rankdir=LR;
+    node [shape=box, style=filled, fillcolor=lightgray, fontname="Helvetica", fontsize=10];
+    edge [fontname="Helvetica", fontsize=8];
+    compound=true;
+
+    subgraph cluster_control {
+        label = "Management Server (Localhost)";
+        style=dashed;
+        color=blue;
+        Ansible [label="Ansible Engine", fillcolor=lightblue, shape=hexagon];
+        KeaConfig [label="Kea DHCP Config\n(/etc/kea/)", shape=note];
+        ACME [label="acme.sh (Cert Mgmt)\nSourcequench / Ayrio", fillcolor="#fff9c4", shape=note];
+        Backups [label="Local Backups\n(~/backups/)", shape=folder];
+        Syslog [label="rsyslog Receiver\n(Port 6514 TLS)", fillcolor=honeydew, shape=cylinder];
+        SSH_CA [label="SSH CA & gcert\n(/etc/ssh/)", fillcolor=lightcyan, shape=hexagon];
+        X509_CA [label="Local X.509 CA\n(mTLS)", fillcolor=lightcyan, shape=hexagon];
+    }
+
+    subgraph cluster_unifi {
+        label = "UniFi Infrastructure";
+        color=darkgreen;
+        CloudKey [label="CloudKey (172.16.1.2)\nUniFi OS / API", fillcolor=honeydew];
+        APs [label="unifi-APs (Pond, Pool, etc.)", shape=component];
+    }
+
+    subgraph cluster_kubernetes {
+        label = "HA k3s Cluster";
+        color=orange;
+        K8s_Nodes [label="uno, dos, tres, cuatro, cinco\n(Servers & Agents)", fillcolor=floralwhite, shape=component];
+        
+        subgraph cluster_k8s_services {
+            label = "Infrastructure & Apps";
+            style=dotted;
+            MetalLB [label="MetalLB\n(172.16.1.200)", fillcolor=lightyellow];
+            Traefik [label="Traefik Ingress\n(SSL Termination)", fillcolor=lightyellow];
+            Longhorn [label="Longhorn Storage", fillcolor=lightyellow];
+            Kuma [label="Uptime Kuma\n(status.sourcequench.org)", fillcolor=lightyellow];
+            Ayrio [label="ayrio.net Website\n(Namespace: ayrio)", fillcolor="#bbdefb"];
+            Ntfy [label="ntfy.sourcequench.org", fillcolor="#bbdefb"];
+            Budget [label="budget.sourcequench.org", fillcolor="#bbdefb"];
+        }
+    }
+
+    subgraph cluster_vps {
+        label = "Remote Infrastructure (OpenBSD)";
+        color=darkred;
+        MuppetHouse [label="muppethouse.com\n(Mail / DNS / Shell)", fillcolor="#ffe0b2"];
+    }
+
+    subgraph cluster_routers {
+        label = "EdgeRouters";
+        color=red;
+        Routers [label="router-fios\nrouter-xfinity", fillcolor=mistyrose];
+    }
+
+    // Relationships
+    KeaConfig -> Ansible [label="Hostnames"];
+    ACME -> Ansible [label="Trigger Deploy Hook"];
+    
+    Ansible -> CloudKey [label="Sync / Certs", color=darkgreen];
+    Ansible -> K8s_Nodes [label="Upgrades / CA", color=orange];
+    Ansible -> Routers [label="Deploy Certs / CA", color=red];
+    Ansible -> MuppetHouse [label="Mail Config / SRS / CA", color=darkred];
+    Ansible -> Kuma [label="Sync Monitors", color=blue];
+    
+    Traefik -> Ayrio [label="HTTPS Proxy"];
+    Traefik -> Kuma [label="HTTPS Proxy"];
+    Traefik -> Ntfy [label="HTTPS Proxy"];
+    Ayrio -> Longhorn [label="Persistent Content"];
+    
+    SSH_CA -> Routers [label="SSH Trust", style=dashed];
+    SSH_CA -> K8s_Nodes [label="SSH Trust", style=dashed];
+    SSH_CA -> MuppetHouse [label="SSH Trust", style=dashed];
+    
+    X509_CA -> MuppetHouse [label="IMAP mTLS"];
+    
+    K8s_Nodes -> Syslog [label="TLS Logs", color=orange];
+    MuppetHouse -> Syslog [label="TLS Logs", color=darkred];
+    
+    Routers -> Backups [label="Weekly Pull", style=dotted];
+    MuppetHouse -> Backups [label="Weekly Pull", style=dotted];
+}
+```
+
 ## 1. Infrastructure Expansion & Security
 - **OpenBSD Integration:** Added `muppethouse.com` to the Ansible inventory under the `[servers]` group.
   - Configured `ansible_become_method=doas` for OpenBSD compatibility.
