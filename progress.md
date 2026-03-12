@@ -286,9 +286,7 @@ digraph NetworkManagement {
 
 ## 10. Mail Server Reliability (Alias Fix & SRS)
 - **Loop Resolution:** Fixed a critical infinite loop in the `ayrio.net` virtual alias table that was causing "524 5.2.4 Mailing list expansion problem" errors.
-- **DMARC/SPF Optimization:**
-  - Implemented **SRS (Sender Rewriting Scheme)** in `smtpd.conf` on `muppethouse.com`.
-  - Configured outbound relaying to rewrite envelope-from addresses for forwarded mail, ensuring DMARC/SPF compliance and high deliverability for all hosted domains.
+- **SMTPS Authentication:** Enabled mandatory password-based authentication on port 465 (`smtps auth`) to support standard mail clients like Thunderbird using system credentials.
 
 ## 11. Automated Certificate Deployment (acme.sh)
 - **Centralized Orchestration:** Created `ansible/deploy_certs.sh` as a master deployment script to handle multiple domains and multi-target pushes (Kubernetes, EdgeRouters, OpenBSD Mail).
